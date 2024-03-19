@@ -188,10 +188,11 @@ class DownloaderWorker(QThread):
                 except Exception as err:
                     return 0
             self.window.filesize = self.window.video_download.filesize
+        home_dir = os.path.expanduser('~')
         if os.name == "nt":
-            video_download.download("C:/Users/" + os.getlogin() + "/Desktop/YT_Downloader/")
+            video_download.download(f"{home_dir}/Videos")
         else:
-            video_download.download("~/Desktop/YT_Downloader/")
+            video_download.download(f"{home_dir}/Videos")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
