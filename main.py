@@ -1,16 +1,14 @@
 import sys
 import os
-from PySide6.QtCore import Qt, QUrl, QThread, QObject, Signal
+from PySide6.QtCore import Qt, QThread, QObject, Signal
 from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QLineEdit, QHBoxLayout, QVBoxLayout,
                                QPushButton, QWidget, QListWidget,
                                QListWidgetItem, QRadioButton, QGroupBox,
                                QProgressBar, QMessageBox)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtGui import QPixmap, QImage
-from PySide6.QtNetwork import QNetworkRequest, QNetworkAccessManager
+from PySide6.QtGui import QPixmap
 from pytube import YouTube, Playlist
-import threading
 
 videos = []
 
@@ -88,23 +86,6 @@ class MainWindow(QMainWindow):
         self.video.register_on_complete_callback(self.on_complete_callback)
         self.video.register_on_progress_callback(self.on_progress_callback)
 
-        """
-        video_thumbnail_url = QUrl(video.thumbnail_url)
-        video_image_request_object = QNetworkRequest(video_thumbnail_url)
-        manager = QNetworkAccessManager()
-        # video_image_downloaded = QNetworkAccessManager.get(video_image_request_object)
-        video_image_downloaded_reply = manager.get(video_image_request_object)
-        video_image_downloaded = video_image_downloaded_reply.readAll()
-        img_class = QImage()
-        video_image = img_class.loadFromData(video_image_downloaded)
-        print(video_image_downloaded_reply.)
-        self.video_image_frame.setPixmap(video_image)
-
-        print(type(video.streams.filter(file_extension="mp4")))
-        for stream in video.streams:
-            QListWidgetItem()
-            
-        """
         self.stream_list_widget.hide()
 
         video_id = video_url.split("?v=")[-1]
