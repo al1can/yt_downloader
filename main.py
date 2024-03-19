@@ -1,6 +1,6 @@
 import sys
 import os
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl, QThread, QObject, Signal
 from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QLineEdit, QHBoxLayout, QVBoxLayout,
                                QPushButton, QWidget, QListWidget,
@@ -10,6 +10,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtGui import QPixmap, QImage
 from PySide6.QtNetwork import QNetworkRequest, QNetworkAccessManager
 from pytube import YouTube, Playlist
+import threading
 
 videos = []
 
@@ -42,7 +43,7 @@ class MainWindow(QMainWindow):
         self.single_video_button.setChecked(True)
 
         search_button.clicked.connect(self.search_video)
-        download_button.clicked.connect(self.download_video)
+        download_button.clicked.connect(self.download_video_thread)
         clear_button.clicked.connect(self.clear)
         self.show_details_button.clicked.connect(self.show_details)
 
@@ -77,20 +78,6 @@ class MainWindow(QMainWindow):
 
         central.setLayout(layout)
         self.setCentralWidget(central)
-
-    def on_complete_callback(self, stream, file_path):
-        pass
-
-    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
-        # total_size = stream.filesize
-        # bytes_downloaded = total_size - bytes_remaining
-        # percentage = int((bytes_downloaded / total_size) * 100)
-
-        # global filesize
-        remaining = (100 * bytes_remaining) / self.filesize
-        step = 100 - int(remaining)
-
-        self.progress_bar.setValue(step)
 
     def search_video(self):
         self.show_details_button.setText("Show details")
@@ -127,32 +114,6 @@ class MainWindow(QMainWindow):
 
         videos.append(self.video)
 
-    def download_video(self):
-        self.progress_bar.setValue(0)
-        if self.playlist_button.isChecked():
-            return
-        if self.stream_list_widget.selectedItems():
-            index = self.stream_list_widget.currentRow()
-            video_download = self.streams[index]
-        else:
-            if self.audio_only_button.isChecked():
-                try:
-                    video_download = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
-                except Exception as err:
-                    QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__())
-                    return 0
-            else:
-                try:
-                    video_download = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
-                except Exception as err:
-                    QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__())
-                    return 0
-            self.filesize = video_download.filesize
-        if os.name == "nt":
-            video_download.download("C:/Users/" + os.getlogin() + "/Desktop/YT_Downloader/")
-        else:
-            video_download.download("~/Desktop/YT_Downloader/")
-
     def clear(self):
         self.video_frame.setHtml("")
         self.video_url_text.setText("")
@@ -171,6 +132,66 @@ class MainWindow(QMainWindow):
                 self.stream_list_widget.addItem(stream_item)
                 self.streams[index] = stream
             self.stream_list_widget.show()
+
+    def on_complete_callback(self, stream, file_path):
+        pass
+
+    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        # total_size = stream.filesize
+        # bytes_downloaded = total_size - bytes_remaining
+        # percentage = int((bytes_downloaded / total_size) * 100)
+
+        # global filesize
+        remaining = (100 * bytes_remaining) / self.filesize
+        step = 100 - int(remaining)
+
+        self.progress_bar.setValue(step)
+
+
+    def download_video_thread(self):
+        thread = QThread()
+        self.download_video_worker = DownloaderWorker(self)
+
+        #   self.download_video_worker.moveToThread(thread)
+        self.download_video_worker.started.connect(self.progress_bar.setValue)
+        
+        self.download_video_worker.start()
+
+class DownloaderWorker(QThread):
+    started = Signal(int)
+    finished = Signal()
+    #progress = Signal()
+    #error = Signal(tuple)
+
+    def __init__(self, window):
+        super().__init__(window)
+        self.window = window
+
+    def run(self):
+        self.started.emit(0)
+        if self.window.playlist_button.isChecked():
+            return
+        if self.window.stream_list_widget.selectedItems():
+            index = self.window.stream_list_widget.currentRow()
+            video_download = self.window.streams[index]
+        else:
+            if self.window.audio_only_button.isChecked():
+                try:
+                    video_download = self.window.video.streams.filter(file_extension="mp4", only_audio=True).first()
+                except Exception as err:
+                    QMessageBox.critical(self.window, "Error", "An error occurred: " + err.__str__())
+                    return 0
+            else:
+                try:
+                    video_download = self.window.video.streams.filter(file_extension="mp4").get_highest_resolution()
+                    QMessageBox.critical(self.window, "Error", "An error occurred: " + err.__str__())
+                except Exception as err:
+                    return 0
+            self.window.filesize = self.window.video_download.filesize
+        if os.name == "nt":
+            video_download.download("C:/Users/" + os.getlogin() + "/Desktop/YT_Downloader/")
+        else:
+            video_download.download("~/Desktop/YT_Downloader/")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
