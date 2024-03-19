@@ -78,22 +78,39 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
     def search_video(self):
-        self.show_details_button.setText("Show details")
+        try:
+            self.show_details_button.setText("Show details")
 
-        video_url = self.video_url_text.text()
-        self.video = YouTube(video_url)
+            video_url = self.video_url_text.text()
+            self.video = YouTube(video_url)
 
-        self.video.register_on_complete_callback(self.on_complete_callback)
-        self.video.register_on_progress_callback(self.on_progress_callback)
+            self.video.register_on_complete_callback(self.on_complete_callback)
+            self.video.register_on_progress_callback(self.on_progress_callback)
 
-        self.stream_list_widget.hide()
+            self.stream_list_widget.hide()
 
-        video_id = video_url.split("?v=")[-1]
-        embed_link = "https://www.youtube.com/embed/" + video_id
-        embed_link_complete = "<iframe width=\"750\" height=\"340\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
-        self.video_frame.setHtml(embed_link_complete)
+            params = video_url.split("?")[-1].split("&")
+            print(params)
+            for param in params:
+                key, value = param.split('=')
+                if key == 'v':
+                    video_id = value
+                
+            if video_id is None:
+                QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
 
-        videos.append(self.video)
+            print(video_id)
+            
+            embed_link = "https://www.youtube.com/embed/" + video_id
+            embed_link_complete = "<iframe width=\"750\" height=\"340\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+            self.video_frame.setHtml(embed_link_complete)
+
+            """
+            <iframe width="1280" height="720" src="https://www.youtube.com/embed/665rzOSSxWA" title="Computing the Euclidean Algorithm in raw ARM Assembly" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>"""
+
+            videos.append(self.video)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}") 
 
     def clear(self):
         self.video_frame.setHtml("")
