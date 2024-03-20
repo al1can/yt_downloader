@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtGui import QPixmap
 from pytube import YouTube, Playlist
+import threading
 
 videos = []
 
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
         self.single_video_button.setChecked(True)
 
         search_button.clicked.connect(self.search_video)
-        download_button.clicked.connect(self.download_video_thread)
+        download_button.clicked.connect(lambda: self.video_downloader_handler(self.video))
         clear_button.clicked.connect(self.clear)
         self.show_details_button.clicked.connect(self.show_details)
 
@@ -51,9 +52,12 @@ class MainWindow(QMainWindow):
         layout_bottom = QHBoxLayout()
         bottom_gbox = QGroupBox()
         bottom_gbox.setMaximumWidth(800)
-        bottom_gbox.setMaximumHeight(40)
+        bottom_gbox.setMaximumHeight(50)
+        bottom_gbox.setMinimumHeight(40)
+        video_type_gbox.setMinimumHeight(40)
         video_type_gbox.setMaximumWidth(800)
-        video_type_gbox.setMaximumHeight(35)
+        video_type_gbox.setMaximumHeight(50)
+        video_type_gbox.setMinimumHeight(40)
         layout_gbox.addWidget(self.single_video_button)
         layout_gbox.addWidget(self.playlist_button)
         video_type_gbox.setLayout(layout_gbox)
@@ -90,7 +94,7 @@ class MainWindow(QMainWindow):
             self.stream_list_widget.hide()
 
             params = video_url.split("?")[-1].split("&")
-            print(params)
+            
             for param in params:
                 key, value = param.split('=')
                 if key == 'v':
@@ -98,8 +102,6 @@ class MainWindow(QMainWindow):
                 
             if video_id is None:
                 QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
-
-            print(video_id)
             
             embed_link = "https://www.youtube.com/embed/" + video_id
             embed_link_complete = "<iframe width=\"750\" height=\"340\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
@@ -135,6 +137,8 @@ class MainWindow(QMainWindow):
         pass
 
     def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        # TODO: change this when fixing progress bar
+        self.filesize = 1
         # total_size = stream.filesize
         # bytes_downloaded = total_size - bytes_remaining
         # percentage = int((bytes_downloaded / total_size) * 100)
@@ -145,52 +149,49 @@ class MainWindow(QMainWindow):
 
         self.progress_bar.setValue(step)
 
-
-    def download_video_thread(self):
-        thread = QThread()
-        self.download_video_worker = DownloaderWorker(self)
-
-        #   self.download_video_worker.moveToThread(thread)
-        self.download_video_worker.started.connect(self.progress_bar.setValue)
+    def video_downloader_handler(self, video):
+        stream = None
+        if self.audio_only_button.isChecked():     
+            stream = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
+        elif self.stream_list_widget.selectedItems():
+            index = self.stream_list_widget.currentRow()
+            video_download = self.streams[index]
+        else:
+            stream = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
         
-        self.download_video_worker.start()
+        self.video_downloader = VideoDownloaderWorker(video, stream)
+        self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
 
-class DownloaderWorker(QThread):
+        self.video_downloader.start()
+
+class VideoDownloaderWorker(QThread):
     started = Signal(int)
     finished = Signal()
     #progress = Signal()
-    #error = Signal(tuple)
+    error = Signal(tuple)
 
-    def __init__(self, window):
-        super().__init__(window)
-        self.window = window
+    def __init__(self, video, stream):
+        super().__init__()
+        self.video = video
+        self.stream = stream
 
     def run(self):
         self.started.emit(0)
-        if self.window.playlist_button.isChecked():
-            return
-        if self.window.stream_list_widget.selectedItems():
-            index = self.window.stream_list_widget.currentRow()
-            video_download = self.window.streams[index]
-        else:
-            if self.window.audio_only_button.isChecked():
-                try:
-                    video_download = self.window.video.streams.filter(file_extension="mp4", only_audio=True).first()
-                except Exception as err:
-                    QMessageBox.critical(self.window, "Error", "An error occurred: " + err.__str__())
-                    return 0
+        # This part is for playlist installation, will check it later
+        #if self.window.playlist_button.isChecked():
+            #return
+
+        # This is for progress bar
+        #self.window.filesize = stream.filesize
+        try:            
+            home_dir = os.path.expanduser('~')
+            if os.name == "nt":
+                self.stream.download(f"{home_dir}/Videos")
             else:
-                try:
-                    video_download = self.window.video.streams.filter(file_extension="mp4").get_highest_resolution()
-                    QMessageBox.critical(self.window, "Error", "An error occurred: " + err.__str__())
-                except Exception as err:
-                    return 0
-            self.window.filesize = self.window.video_download.filesize
-        home_dir = os.path.expanduser('~')
-        if os.name == "nt":
-            video_download.download(f"{home_dir}/Videos")
-        else:
-            video_download.download(f"{home_dir}/Videos")
+                self.stream.download(f"{home_dir}/Videos")
+        except Exception as err:
+            return self.error.emit(err.__str__())
+        self.finished.emit()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
