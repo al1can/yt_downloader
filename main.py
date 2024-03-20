@@ -12,14 +12,15 @@ from pytube import YouTube, Playlist
 import threading
 
 videos = []
-
+WINDOW_HEIGHT = 700
+WINDOW_WIDTH = 800
 
 class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("YT Downloader")
-        self.setMinimumWidth(800)
-        self.setMinimumHeight(700)
+        self.setMinimumWidth(WINDOW_WIDTH)
+        self.setMinimumHeight(WINDOW_HEIGHT)
 
         central = QWidget(self)
 
@@ -46,7 +47,6 @@ class MainWindow(QMainWindow):
         self.clear_button.setMinimumHeight(35)
         self.download_button.setMinimumHeight(35)
         self.show_details_button.setMinimumHeight(35)
-
 
         self.search_button.clicked.connect(self.search_video)
         self.download_button.clicked.connect(lambda: self.video_downloader_handler(self.video))
@@ -111,11 +111,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
             
             embed_link = "https://www.youtube.com/embed/" + video_id
-            embed_link_complete = "<iframe width=\"765\" height=\"350\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+            embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, self.size().height()/2)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
             self.video_frame.setHtml(embed_link_complete)
-
-            """
-            <iframe width="1280" height="720" src="https://www.youtube.com/embed/665rzOSSxWA" title="Computing the Euclidean Algorithm in raw ARM Assembly" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>"""
 
             videos.append(self.video)
         except Exception as e:
@@ -154,7 +151,8 @@ class MainWindow(QMainWindow):
         remaining = (100 * bytes_remaining) / self.filesize
         step = 100 - int(remaining)
 
-        self.progress_bar.setValue(step)
+        #Change this to step
+        self.progress_bar.setValue(10)
 
     def video_downloader_handler(self, video):
         stream = None
