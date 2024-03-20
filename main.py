@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("YT Downloader")
         self.setMinimumWidth(800)
-        self.setMinimumHeight(600)
+        self.setMinimumHeight(700)
 
         central = QWidget(self)
 
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
             
             embed_link = "https://www.youtube.com/embed/" + video_id
-            embed_link_complete = "<iframe width=\"750\" height=\"340\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+            embed_link_complete = "<iframe width=\"765\" height=\"350\" src=\"" + embed_link + "\" title=\"" + self.video.title +" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
             self.video_frame.setHtml(embed_link_complete)
 
             """
