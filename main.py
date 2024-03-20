@@ -111,7 +111,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
             
             embed_link = "https://www.youtube.com/embed/" + video_id
-            embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, self.size().height()/2)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+            embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, (self.size().height()/2)-30)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
             self.video_frame.setHtml(embed_link_complete)
 
             videos.append(self.video)
