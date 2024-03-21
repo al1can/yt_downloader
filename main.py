@@ -95,9 +95,6 @@ class MainWindow(QMainWindow):
             video_url = self.video_url_text.text()
             self.video = YouTube(video_url)
 
-            self.video.register_on_complete_callback(self.on_complete_callback)
-            self.video.register_on_progress_callback(self.on_progress_callback)
-
             self.stream_list_widget.hide()
 
             params = video_url.split("?")[-1].split("&")
@@ -137,24 +134,6 @@ class MainWindow(QMainWindow):
                 self.streams[index] = stream
             self.stream_list_widget.show()
 
-    def on_complete_callback(self, stream, file_path):
-        pass
-
-    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
-        return
-        # TODO: change this when fixing progress bar
-        self.filesize = 1
-        # total_size = stream.filesize
-        # bytes_downloaded = total_size - bytes_remaining
-        # percentage = int((bytes_downloaded / total_size) * 100)
-
-        # global filesize
-        remaining = (100 * bytes_remaining) / self.filesize
-        step = 100 - int(remaining)
-
-        #Change this to step
-        self.progress_bar.setValue(10)
-
     def video_downloader_handler(self, video):
         stream = None
         if self.audio_only_button.isChecked():     
@@ -171,7 +150,8 @@ class MainWindow(QMainWindow):
         self.video_downloader_thread = QThread()
         self.video_downloader = VideoDownloaderWorker(video, stream)
         self.video_downloader.moveToThread(self.video_downloader_thread)
-        self.video_downloader_thread.started.connect(self.video_downloader.download_video())
+        self.video_downloader_thread.started.connect(self.video_downloader.download_video)
+        self.video_downloader.progress.connect(lambda step: self.progress_bar.setValue(step))
         self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
 
         self.video_downloader_thread.start()
@@ -179,13 +159,16 @@ class MainWindow(QMainWindow):
 class VideoDownloaderWorker(QThread):
     started = Signal(int)
     finished = Signal()
-    #progress = Signal()
+    progress = Signal(int)
     error = Signal(str)
 
     def __init__(self, video, stream):
         super().__init__()
         self.video = video
         self.stream = stream
+
+        self.video.register_on_complete_callback(self.on_complete_callback)
+        self.video.register_on_progress_callback(self.on_progress_callback)            
 
     def download_video(self):
         self.started.emit(0)
@@ -204,6 +187,23 @@ class VideoDownloaderWorker(QThread):
         except Exception as err:
             return self.error.emit(err.__str__())
         self.finished.emit()
+
+    def on_complete_callback(self, stream, file_path):
+        pass
+
+    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        # TODO: change this when fixing progress bar
+        self.filesize = self.stream.filesize
+        # total_size = stream.filesize
+        # bytes_downloaded = total_size - bytes_remaining
+        # percentage = int((bytes_downloaded / total_size) * 100)
+
+        # global filesize
+        remaining = (100 * bytes_remaining) / self.filesize
+        step = 100 - int(remaining)
+
+        #Change this to step
+        self.progress.emit(step)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
