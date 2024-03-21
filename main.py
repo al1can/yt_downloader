@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
         pass
 
     def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        return
         # TODO: change this when fixing progress bar
         self.filesize = 1
         # total_size = stream.filesize
@@ -163,24 +164,30 @@ class MainWindow(QMainWindow):
             video_download = self.streams[index]
         else:
             stream = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
-        
+            
+        print("video:", video)
+        print("stream:", stream)
+
+        self.video_downloader_thread = QThread()
         self.video_downloader = VideoDownloaderWorker(video, stream)
+        self.video_downloader.moveToThread(self.video_downloader_thread)
+        self.video_downloader_thread.started.connect(self.video_downloader.download_video())
         self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
 
-        self.video_downloader.start()
+        self.video_downloader_thread.start()
 
 class VideoDownloaderWorker(QThread):
     started = Signal(int)
     finished = Signal()
     #progress = Signal()
-    error = Signal(tuple)
+    error = Signal(str)
 
     def __init__(self, video, stream):
         super().__init__()
         self.video = video
         self.stream = stream
 
-    def run(self):
+    def download_video(self):
         self.started.emit(0)
         # This part is for playlist installation, will check it later
         #if self.window.playlist_button.isChecked():
