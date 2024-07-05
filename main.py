@@ -121,6 +121,12 @@ class MainWindow(QMainWindow):
             with open('config.ini', 'w') as configfile:
                 config.write(configfile)
 
+    def config_change_directory(self):
+        config = configparser.ConfigParser()
+        config['General'] = {'download_directory': self.download_directory}
+        with open('config.ini', 'w+') as configfile:
+            config.write(configfile)
+
     def create_colored_icon(self, base_icon, color):
         pixmap = base_icon.pixmap(64, 64)
         painter = QPainter(pixmap)
@@ -196,6 +202,8 @@ class MainWindow(QMainWindow):
 
         if folder_dialog:
             self.download_directory = folder_dialog
+        
+        self.config_change_directory()
 
     def video_downloader_handler(self, video):
         if hasattr(self, 'video_downloader_thread') and self.video_downloader_thread.isRunning():
