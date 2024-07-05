@@ -109,6 +109,8 @@ class MainWindow(QMainWindow):
         central.setLayout(layout)
         self.setCentralWidget(central)
 
+        self.video = None
+
     def config_init(self):
         config = configparser.ConfigParser()
         config.read('config.ini')
@@ -171,6 +173,8 @@ class MainWindow(QMainWindow):
 
     def show_details(self):
         self.streams = {}
+        if self.video is None:
+            return
         if self.stream_list_widget.isVisible():
             self.stream_list_widget.hide()
             self.show_details_button.setText("Show details")
