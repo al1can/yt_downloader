@@ -11,6 +11,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
 from pytube import YouTube, Playlist
 import threading
+import configparser
 
 videos = []
 WINDOW_HEIGHT = 700
@@ -21,6 +22,9 @@ class MainWindow(QMainWindow):
     
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
+
+        self.config_init()
+
         self.setWindowTitle("YT Downloader")
         self.setMinimumWidth(WINDOW_WIDTH)
         self.setMinimumHeight(WINDOW_HEIGHT)
@@ -105,8 +109,17 @@ class MainWindow(QMainWindow):
         central.setLayout(layout)
         self.setCentralWidget(central)
 
-        home_dir = os.path.expanduser('~')
-        self.download_directory = f"{home_dir}/Videos"
+    def config_init(self):
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        try:
+            self.download_directory = config.get('General', 'download_directory')
+        except:        
+            home_dir = os.path.expanduser('~')
+            self.download_directory = f"{home_dir}/Videos"
+            config['General'] = {'download_directory': self.download_directory}
+            with open('config.ini', 'w') as configfile:
+                config.write(configfile)
 
     def create_colored_icon(self, base_icon, color):
         pixmap = base_icon.pixmap(64, 64)
@@ -172,16 +185,9 @@ class MainWindow(QMainWindow):
         # TODO: change this when fixing progress bar
         return
         self.filesize = self.stream.filesize
-        #self.filesize = 1
-        # total_size = stream.filesize
-        # bytes_downloaded = total_size - bytes_remaining
-        # percentage = int((bytes_downloaded / total_size) * 100)
-
-        # global filesize
         remaining = (100 * bytes_remaining) / self.filesize
         step = 100 - int(remaining)
 
-        #Change this to step
         self.progress_bar.setValue(step)
 
     def change_download_directory(self):
@@ -245,13 +251,6 @@ class VideoDownloaderWorker(QObject):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     frame = MainWindow()
-    
-    #frame_thread = QThread()
-    #frame = MainWindow()
-    #frame.moveToThread(frame_thread)
-    #frame_thread.started.connect(frame.show())
-
-    #frame_thread.start()
 
     frame.show()
     app.exec()
