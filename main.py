@@ -5,9 +5,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QLineEdit, QHBoxLayout, QVBoxLayout,
                                QPushButton, QWidget, QListWidget,
                                QListWidgetItem, QRadioButton, QGroupBox,
-                               QProgressBar, QMessageBox)
+                               QProgressBar, QMessageBox, QStyle,
+                               QFileDialog)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
 from pytube import YouTube, Playlist
 import threading
 
@@ -16,6 +17,8 @@ WINDOW_HEIGHT = 700
 WINDOW_WIDTH = 800
 
 class MainWindow(QMainWindow):
+    started = Signal(int)
+    
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setWindowTitle("YT Downloader")
@@ -33,6 +36,11 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedWidth(400)
         self.download_button = QPushButton("Download")
+        self.directory_button = QPushButton('')
+        pixmapi = getattr(QStyle, 'SP_DirIcon')
+        icon = self.style().standardIcon(pixmapi)
+        colored_icon = self.create_colored_icon(icon, 'white')
+        self.directory_button.setIcon(colored_icon)
         self.clear_button = QPushButton("Clear")
         self.video_frame = QWebEngineView()
         self.stream_list_widget = QListWidget()
@@ -46,12 +54,16 @@ class MainWindow(QMainWindow):
         self.search_button.setMinimumHeight(35)
         self.clear_button.setMinimumHeight(35)
         self.download_button.setMinimumHeight(35)
+        self.directory_button.setMinimumHeight(35)
         self.show_details_button.setMinimumHeight(35)
+
+        self.directory_button.setMaximumWidth(50)
 
         self.search_button.clicked.connect(self.search_video)
         self.download_button.clicked.connect(lambda: self.video_downloader_handler(self.video))
         self.clear_button.clicked.connect(self.clear)
         self.show_details_button.clicked.connect(self.show_details)
+        self.directory_button.clicked.connect(self.change_download_directory)
 
         layout = QVBoxLayout()
         layout_gbox = QHBoxLayout()
@@ -83,10 +95,26 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.stream_list_widget)
         self.stream_list_widget.hide()
         layout.addWidget(self.show_details_button)
-        layout.addWidget(self.download_button)
+
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addWidget(self.download_button)
+        bottom_layout.addWidget(self.directory_button)
+
+        layout.addLayout(bottom_layout)
 
         central.setLayout(layout)
         self.setCentralWidget(central)
+
+        home_dir = os.path.expanduser('~')
+        self.download_directory = f"{home_dir}/Videos"
+
+    def create_colored_icon(self, base_icon, color):
+        pixmap = base_icon.pixmap(64, 64)
+        painter = QPainter(pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), QColor(color))
+        painter.end()
+        return QIcon(pixmap)
 
     def search_video(self):
         try:
@@ -94,6 +122,9 @@ class MainWindow(QMainWindow):
 
             video_url = self.video_url_text.text()
             self.video = YouTube(video_url)
+
+            self.video.register_on_complete_callback(self.on_complete_callback)
+            self.video.register_on_progress_callback(self.on_progress_callback)
 
             self.stream_list_widget.hide()
 
@@ -134,41 +165,68 @@ class MainWindow(QMainWindow):
                 self.streams[index] = stream
             self.stream_list_widget.show()
 
+    def on_complete_callback(self, stream, file_path):
+        pass
+
+    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        # TODO: change this when fixing progress bar
+        return
+        self.filesize = self.stream.filesize
+        #self.filesize = 1
+        # total_size = stream.filesize
+        # bytes_downloaded = total_size - bytes_remaining
+        # percentage = int((bytes_downloaded / total_size) * 100)
+
+        # global filesize
+        remaining = (100 * bytes_remaining) / self.filesize
+        step = 100 - int(remaining)
+
+        #Change this to step
+        self.progress_bar.setValue(step)
+
+    def change_download_directory(self):
+        options = QFileDialog.Options()
+        folder_dialog = QFileDialog.getExistingDirectory(self, "Select Directory", options=options)
+
+        if folder_dialog:
+            self.download_directory = folder_dialog
+
     def video_downloader_handler(self, video):
-        stream = None
+        if hasattr(self, 'video_downloader_thread') and self.video_downloader_thread.isRunning():
+            self.video_downloader_thread.quit()
+            self.video_downloader_thread.wait()
+
+        self.stream = None
         if self.audio_only_button.isChecked():     
-            stream = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
+            self.stream = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
         elif self.stream_list_widget.selectedItems():
             index = self.stream_list_widget.currentRow()
-            video_download = self.streams[index]
+            self.stream = self.streams[index]
         else:
-            stream = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
+            self.stream = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
             
         print("video:", video)
-        print("stream:", stream)
+        print("stream:", self.stream)
 
         self.video_downloader_thread = QThread()
-        self.video_downloader = VideoDownloaderWorker(video, stream)
+        self.video_downloader = VideoDownloaderWorker(video, self.stream, self.download_directory)
         self.video_downloader.moveToThread(self.video_downloader_thread)
         self.video_downloader_thread.started.connect(self.video_downloader.download_video)
-        self.video_downloader.progress.connect(lambda step: self.progress_bar.setValue(step))
         self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
 
         self.video_downloader_thread.start()
 
-class VideoDownloaderWorker(QThread):
+class VideoDownloaderWorker(QObject):
     started = Signal(int)
     finished = Signal()
-    progress = Signal(int)
+    #progress = Signal()
     error = Signal(str)
 
-    def __init__(self, video, stream):
+    def __init__(self, video, stream, download_directory):
         super().__init__()
         self.video = video
         self.stream = stream
-
-        self.video.register_on_complete_callback(self.on_complete_callback)
-        self.video.register_on_progress_callback(self.on_progress_callback)            
+        self.download_directory = download_directory
 
     def download_video(self):
         self.started.emit(0)
@@ -179,35 +237,21 @@ class VideoDownloaderWorker(QThread):
         # This is for progress bar
         #self.window.filesize = stream.filesize
         try:            
-            home_dir = os.path.expanduser('~')
-            if os.name == "nt":
-                self.stream.download(f"{home_dir}/Videos")
-            else:
-                self.stream.download(f"{home_dir}/Videos")
+            self.stream.download(self.download_directory)
         except Exception as err:
             return self.error.emit(err.__str__())
         self.finished.emit()
 
-    def on_complete_callback(self, stream, file_path):
-        pass
-
-    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
-        # TODO: change this when fixing progress bar
-        self.filesize = self.stream.filesize
-        # total_size = stream.filesize
-        # bytes_downloaded = total_size - bytes_remaining
-        # percentage = int((bytes_downloaded / total_size) * 100)
-
-        # global filesize
-        remaining = (100 * bytes_remaining) / self.filesize
-        step = 100 - int(remaining)
-
-        #Change this to step
-        self.progress.emit(step)
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     frame = MainWindow()
+    
+    #frame_thread = QThread()
+    #frame = MainWindow()
+    #frame.moveToThread(frame_thread)
+    #frame_thread.started.connect(frame.show())
+
+    #frame_thread.start()
 
     frame.show()
     app.exec()
