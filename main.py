@@ -1,6 +1,6 @@
 import sys
 import os
-from PySide6.QtCore import Qt, QThread, QObject, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, QObject, Signal, QTimer, QMetaObject, Q_ARG, Slot
 from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QLineEdit, QHBoxLayout, QVBoxLayout,
                                QPushButton, QWidget, QListWidget,
@@ -19,6 +19,8 @@ WINDOW_WIDTH = 800
 
 class MainWindow(QMainWindow):
     started = Signal(int)
+    progress_updated = Signal(int)
+    download_completed = Signal(int)
     
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -68,6 +70,9 @@ class MainWindow(QMainWindow):
         self.clear_button.clicked.connect(self.clear)
         self.show_details_button.clicked.connect(self.show_details)
         self.directory_button.clicked.connect(self.change_download_directory)
+
+        self.download_completed.connect(self.on_download_complete)
+        self.progress_updated.connect(self.update_progress)
 
         layout = QVBoxLayout()
         layout_gbox = QHBoxLayout()
@@ -137,16 +142,26 @@ class MainWindow(QMainWindow):
         painter.end()
         return QIcon(pixmap)
 
+    @Slot(int)
+    def update_progress(self, value):
+        self.progress_bar.setValue(value)
+
+    @Slot()
+    def on_download_complete(self):
+        QMessageBox.information(self, "Download Complete", f"Download finished: {self.download_directory}")
+
     def search_video(self):
+        print(threading.current_thread)
+        self.progress_updated.emit(0)
+        
         try:
             self.show_details_button.setText("Show details")
 
             video_url = self.video_url_text.text()
             self.video = YouTube(video_url)
 
-            print(QThread.currentThread())
-            self.video.register_on_complete_callback(self.on_complete_callback)
-            self.video.register_on_progress_callback(self.on_progress_callback)
+            self.video.register_on_complete_callback(self._on_complete_callback)
+            self.video.register_on_progress_callback(self._on_progress_callback)
 
             self.stream_list_widget.hide()
 
@@ -172,6 +187,8 @@ class MainWindow(QMainWindow):
         self.video_frame.setHtml("")
         self.video_url_text.setText("")
 
+        self.progress_updated.emit(0)
+
     def show_details(self):
         self.streams = {}
         if self.video is None:
@@ -189,19 +206,22 @@ class MainWindow(QMainWindow):
                 self.streams[index] = stream
             self.stream_list_widget.show()
 
-    def on_complete_callback(self, stream, file_path):
-        pass
-
-    def on_progress_callback(self, chunk, file_handle, bytes_remaining):
+    def _on_complete_callback(self, stream, file_path):
+        self.download_completed.emit(file_path)
+        
+    def _on_progress_callback(self, chunk, file_handle, bytes_remaining):
+        print(threading.current_thread)
         # TODO: change this when fixing progress bar
         self.filesize = self.stream.filesize
         remaining = (100 * bytes_remaining) / self.filesize
         step = 100 - int(remaining)
 
-        self.progress_bar.setValue(step)
-        
+        # Update progress bar in the main thread
+        #QMetaObject.invokeMethod(self.window.progress_bar, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
+        #self.progress_bar.setValue(step)
+        self.progress_updated.emit(int(step))
+
     def change_download_directory(self):
-        print(QThread.currentThread())
         options = QFileDialog.Options()
         folder_dialog = QFileDialog.getExistingDirectory(self, "Select Directory", options=options)
 
@@ -211,10 +231,6 @@ class MainWindow(QMainWindow):
         self.config_change_directory()
 
     def video_downloader_handler(self, video):
-        if hasattr(self, 'video_downloader_thread') and self.video_downloader_thread.isRunning():
-            self.video_downloader_thread.quit()
-            self.video_downloader_thread.wait()
-
         self.stream = None
         if self.audio_only_button.isChecked():     
             self.stream = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
@@ -226,6 +242,8 @@ class MainWindow(QMainWindow):
             
         print("video:", video)
         print("stream:", self.stream)
+
+        #self.stream.download(self.download_directory)
 
         download_thread = threading.Thread(target=self.download_video)
         download_thread.daemon = True
@@ -245,11 +263,14 @@ class MainWindow(QMainWindow):
             #return
 
         # This is for progress bar
-        #self.window.filesize = stream.filesize
+        #self.window.filesize = self.stream.filesize
         try:
             self.stream.download(self.download_directory)
         except Exception as err:
             QMessageBox.critical(self.window, "Error", "An error occurred: Video couldn't be downloaded!" + err.__str__())
+
+    def show_message(self, title, message):
+        QMessageBox.information(self, title, message)
 
 class VideoDownloaderWorker(QObject):
     started = Signal(int)
@@ -264,13 +285,14 @@ class VideoDownloaderWorker(QObject):
         self.download_directory = download_directory
 
     def download_video(self):
+        print("dfghj", threading.current_thread)
         self.started.emit(0)
         # This part is for playlist installation, will check it later
         #if self.window.playlist_button.isChecked():
             #return
 
         # This is for progress bar
-        #self.window.filesize = stream.filesize
+        self.window.filesize = self.stream.filesize
         self.stream.download(self.download_directory)
         try:
             self.stream.download(self.download_directory)
