@@ -1,6 +1,6 @@
 import sys
 import os
-from PySide6.QtCore import Qt, QThread, QObject, Signal
+from PySide6.QtCore import Qt, QThread, QObject, Signal, QTimer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QLineEdit, QHBoxLayout, QVBoxLayout,
                                QPushButton, QWidget, QListWidget,
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QFileDialog)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
-from pytube import YouTube, Playlist
+from pytubefix import YouTube, Playlist
 import threading
 import configparser
 
@@ -144,6 +144,7 @@ class MainWindow(QMainWindow):
             video_url = self.video_url_text.text()
             self.video = YouTube(video_url)
 
+            print(QThread.currentThread())
             self.video.register_on_complete_callback(self.on_complete_callback)
             self.video.register_on_progress_callback(self.on_progress_callback)
 
@@ -193,14 +194,14 @@ class MainWindow(QMainWindow):
 
     def on_progress_callback(self, chunk, file_handle, bytes_remaining):
         # TODO: change this when fixing progress bar
-        return
         self.filesize = self.stream.filesize
         remaining = (100 * bytes_remaining) / self.filesize
         step = 100 - int(remaining)
 
         self.progress_bar.setValue(step)
-
+        
     def change_download_directory(self):
+        print(QThread.currentThread())
         options = QFileDialog.Options()
         folder_dialog = QFileDialog.getExistingDirectory(self, "Select Directory", options=options)
 
@@ -226,13 +227,29 @@ class MainWindow(QMainWindow):
         print("video:", video)
         print("stream:", self.stream)
 
-        self.video_downloader_thread = QThread()
-        self.video_downloader = VideoDownloaderWorker(video, self.stream, self.download_directory)
-        self.video_downloader.moveToThread(self.video_downloader_thread)
-        self.video_downloader_thread.started.connect(self.video_downloader.download_video)
-        self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
+        download_thread = threading.Thread(target=self.download_video)
+        download_thread.daemon = True
+        download_thread.start()
 
-        self.video_downloader_thread.start()
+        #self.video_downloader_thread = QThread()
+        #self.video_downloader = VideoDownloaderWorker(video, self.stream, self.download_directory)
+        #self.video_downloader.moveToThread(self.video_downloader_thread)
+        #self.video_downloader_thread.started.connect(self.video_downloader.download_video)
+        #self.video_downloader.error.connect(lambda err: QMessageBox.critical(self, "Error", "An error occurred: " + err.__str__()))
+
+        #self.video_downloader_thread.start()
+
+    def download_video(self):
+        # This part is for playlist installation, will check it later
+        #if self.window.playlist_button.isChecked():
+            #return
+
+        # This is for progress bar
+        #self.window.filesize = stream.filesize
+        try:
+            self.stream.download(self.download_directory)
+        except Exception as err:
+            QMessageBox.critical(self.window, "Error", "An error occurred: Video couldn't be downloaded!" + err.__str__())
 
 class VideoDownloaderWorker(QObject):
     started = Signal(int)
@@ -254,9 +271,12 @@ class VideoDownloaderWorker(QObject):
 
         # This is for progress bar
         #self.window.filesize = stream.filesize
-        try:            
+        self.stream.download(self.download_directory)
+        try:
             self.stream.download(self.download_directory)
+            print("adasdsad")
         except Exception as err:
+            print("dadasdasd")
             return self.error.emit(err.__str__())
         self.finished.emit()
 
