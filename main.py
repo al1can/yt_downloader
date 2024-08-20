@@ -172,12 +172,16 @@ class MainWindow(QMainWindow):
 
             self.stream_list_widget.hide()
 
-            params = video_url.split("?")[-1].split("&")
-            
-            for param in params:
-                key, value = param.split('=')
-                if key == 'v':
-                    video_id = value
+            try:
+                params = video_url.split("?")[-1].split("&")
+                
+                for param in params:
+                    key, value = param.split('=')
+                    if key == 'v':
+                        video_id = value
+            except ValueError as err:
+                QMessageBox.critical(self, "Error", f"The video URL you entered is invalid. Please check the URL and try again.")
+                return
                 
             if video_id is None:
                 QMessageBox.critical(self, "Error", "An error occurred: Video can't be found!")
