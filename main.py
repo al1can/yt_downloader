@@ -322,7 +322,8 @@ class MainWindow(QMainWindow):
         self.resolution_window.select_button.clicked.connect(self.resolution_window.return_state)
         self.resolution_window.select_button.clicked.connect(self.resolution_window.hide)
         #self.resolution_window.resolution_selected.connect(self.start_download_thread)
-        self.resolution_window.exec()
+        if self.audio_only_button.isChecked()==False:
+            self.resolution_window.exec()
         self.playlist_total_size = 0
         self.downloaded_video_playlist = 0
         self.downloaded_bytes_playlist = 0
@@ -332,7 +333,10 @@ class MainWindow(QMainWindow):
             self.playlist_video.register_on_complete_callback(self._on_complete_callback_playlist)
             self.playlist_video.register_on_progress_callback(self._on_progress_callback_playlist)
 
-            self.playlist_video_stream = self.playlist_video.streams.filter(res=self.resolution_window.resolution_selected, file_extension="mp4").first()
+            if self.audio_only_button.isChecked():
+                self.playlist_video_stream = self.playlist_video.streams.filter(file_extension="mp4", only_audio=True).first()
+            else:
+                self.playlist_video_stream = self.playlist_video.streams.filter(res=self.resolution_window.resolution_selected, file_extension="mp4").first()
             if self.playlist_video_stream is None:
                 self.playlist_video_stream = self.playlist_video.streams.filter(file_extension="mp4").first()
 
