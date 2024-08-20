@@ -6,14 +6,13 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QLabel,
                                QPushButton, QWidget, QListWidget,
                                QListWidgetItem, QRadioButton, QGroupBox,
                                QProgressBar, QMessageBox, QStyle,
-                               QFileDialog)
+                               QFileDialog, QDialog)
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
 from pytubefix import YouTube, Playlist
 import threading
 import configparser
 
-videos = []
 WINDOW_HEIGHT = 700
 WINDOW_WIDTH = 800
 
@@ -33,7 +32,7 @@ class MainWindow(QMainWindow):
 
         central = QWidget(self)
 
-        self.video_url_text = QLineEdit(placeholderText="Url of the video")
+        self.url_text = QLineEdit(placeholderText="Url of the video")
         self.video_image_frame = QLabel()
         self.video_image = QPixmap()
         video_streams = QListWidget()
@@ -56,7 +55,7 @@ class MainWindow(QMainWindow):
         self.playlist_button = QRadioButton("Playlist")
         self.single_video_button.setChecked(True)
 
-        self.video_url_text.setMinimumHeight(35)
+        self.url_text.setMinimumHeight(35)
         self.search_button.setMinimumHeight(35)
         self.clear_button.setMinimumHeight(35)
         self.download_button.setMinimumHeight(35)
@@ -65,8 +64,8 @@ class MainWindow(QMainWindow):
 
         self.directory_button.setMaximumWidth(50)
 
-        self.search_button.clicked.connect(self.search_video)
-        self.download_button.clicked.connect(lambda: self.video_downloader_handler(self.video))
+        self.search_button.clicked.connect(self.search)
+        self.download_button.clicked.connect(self.download_handler)
         self.clear_button.clicked.connect(self.clear)
         self.show_details_button.clicked.connect(self.show_details)
         self.directory_button.clicked.connect(self.change_download_directory)
@@ -93,7 +92,7 @@ class MainWindow(QMainWindow):
         layout_bottom.addWidget(self.progress_bar)
         bottom_gbox.setLayout(layout_bottom)
 
-        layout.addWidget(self.video_url_text)
+        layout.addWidget(self.url_text)
         layout.addWidget(video_type_gbox)
         layout.addWidget(self.search_button)
         layout.addWidget(self.clear_button)
@@ -115,6 +114,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         self.video = None
+        self.videos = []
+
+        self.resolution_window = None
 
     def config_init(self):
         config = configparser.ConfigParser()
@@ -150,14 +152,19 @@ class MainWindow(QMainWindow):
     def on_download_complete(self):
         QMessageBox.information(self, "Download Complete", f"Download finished: {self.download_directory}")
 
+    def search(self):
+        if self.single_video_button.isChecked():
+            self.search_video()
+        elif self.playlist_button.isChecked():
+            self.search_playlist()
+
     def search_video(self):
-        print(threading.current_thread)
         self.progress_updated.emit(0)
         
         try:
             self.show_details_button.setText("Show details")
 
-            video_url = self.video_url_text.text()
+            video_url = self.url_text.text()
             self.video = YouTube(video_url)
 
             self.video.register_on_complete_callback(self._on_complete_callback)
@@ -173,19 +180,49 @@ class MainWindow(QMainWindow):
                     video_id = value
                 
             if video_id is None:
-                QMessageBox.critical(self.window, "Error", "An error occurred: Video can't be found!")
+                QMessageBox.critical(self, "Error", "An error occurred: Video can't be found!")
             
             embed_link = "https://www.youtube.com/embed/" + video_id
             embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, (self.size().height()/2)-30)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
             self.video_frame.setHtml(embed_link_complete)
 
-            videos.append(self.video)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}") 
 
+    def search_playlist(self):
+        self.progress_updated.emit(0)
+
+        try:
+            playlist_url = self.url_text.text()
+            self.playlist = Playlist(playlist_url)
+            
+            #self.playlist.register_on_complete_callback(self._on_complete_callback)
+            #self.playlist.register_on_progress_callback(self._on_progress_callback)
+
+            self.stream_list_widget.hide()
+
+            # https://www.youtube.com/playlist?list=OLAK5uy_mWtWynXa5NeLQEJjvrmVZmmO48G4eBBWg
+            params = playlist_url.split("?")[-1].split("&")
+
+            for param in params:
+                key, value = param.split('=')
+                if key == 'list':
+                    playlist_id = value
+
+            if playlist_id is None:
+                QMessageBox.critical(self, "Error", "An error occurred: Video can't be found!")
+
+            embed_link = "https://www.youtube.com/embed/videoseries?list=" + playlist_id
+            embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, (self.size().height()/2)-30)}\" src=\"{embed_link}\" title=\"YouTube video player\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+            self.video_frame.setHtml(embed_link_complete)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}") 
+
+
     def clear(self):
         self.video_frame.setHtml("")
-        self.video_url_text.setText("")
+        self.url_text.setText("")
 
         self.progress_updated.emit(0)
 
@@ -208,10 +245,13 @@ class MainWindow(QMainWindow):
 
     def _on_complete_callback(self, stream, file_path):
         self.download_completed.emit(file_path)
+
+    def _on_complete_callback_playlist(self, stream, file_path):
+        self.downloaded_video_playlist+=1
+        if self.downloaded_video_playlist==len(self.playlist_streams):
+            self.download_completed.emit(file_path)
         
     def _on_progress_callback(self, chunk, file_handle, bytes_remaining):
-        print(threading.current_thread)
-        # TODO: change this when fixing progress bar
         self.filesize = self.stream.filesize
         remaining = (100 * bytes_remaining) / self.filesize
         step = 100 - int(remaining)
@@ -220,6 +260,16 @@ class MainWindow(QMainWindow):
         #QMetaObject.invokeMethod(self.window.progress_bar, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
         #self.progress_bar.setValue(step)
         self.progress_updated.emit(int(step))
+
+    def _on_progress_callback_playlist(self, chunk, file_handle, bytes_remaining):
+        #TODO: progress bar is broken 
+        self.downloaded_bytes_playlist=self.playlist_video_stream.filesize - bytes_remaining
+        step = (100 * self.downloaded_bytes_playlist) / self.playlist_total_size
+
+        # Update progress bar in the main thread
+        #QMetaObject.invokeMethod(self.window.progress_bar, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
+        #self.progress_bar.setValue(step)
+        self.progress_updated.emit(int(step)) 
 
     def change_download_directory(self):
         options = QFileDialog.Options()
@@ -230,7 +280,14 @@ class MainWindow(QMainWindow):
         
         self.config_change_directory()
 
-    def video_downloader_handler(self, video):
+    @Slot()
+    def download_handler(self):
+        if self.single_video_button.isChecked():
+            self.video_downloader_handler()
+        elif self.playlist_button.isChecked():
+            self.playlist_downloader_handler()
+
+    def video_downloader_handler(self):
         self.stream = None
         if self.audio_only_button.isChecked():     
             self.stream = self.video.streams.filter(file_extension="mp4", only_audio=True).first()
@@ -240,7 +297,7 @@ class MainWindow(QMainWindow):
         else:
             self.stream = self.video.streams.filter(file_extension="mp4").get_highest_resolution()
             
-        print("video:", video)
+        print("video:", self.video)
         print("stream:", self.stream)
 
         #self.stream.download(self.download_directory)
@@ -257,20 +314,98 @@ class MainWindow(QMainWindow):
 
         #self.video_downloader_thread.start()
 
-    def download_video(self):
-        # This part is for playlist installation, will check it later
-        #if self.window.playlist_button.isChecked():
-            #return
+    def set_resolution_window(self):
+        pass
+        
+    def playlist_downloader_handler(self):
+        self.resolution_window = ResolutionWindow()
+        self.resolution_window.select_button.clicked.connect(self.resolution_window.return_state)
+        self.resolution_window.select_button.clicked.connect(self.resolution_window.hide)
+        #self.resolution_window.resolution_selected.connect(self.start_download_thread)
+        self.resolution_window.exec()
+        self.playlist_total_size = 0
+        self.downloaded_video_playlist = 0
+        self.downloaded_bytes_playlist = 0
+        self.playlist_streams = []
+        for video_url in self.playlist:
+            self.playlist_video = YouTube(video_url)
+            self.playlist_video.register_on_complete_callback(self._on_complete_callback_playlist)
+            self.playlist_video.register_on_progress_callback(self._on_progress_callback_playlist)
 
-        # This is for progress bar
-        #self.window.filesize = self.stream.filesize
+            self.playlist_video_stream = self.playlist_video.streams.filter(res=self.resolution_window.resolution_selected, file_extension="mp4").first()
+            if self.playlist_video_stream is None:
+                self.playlist_video_stream = self.playlist_video.streams.filter(file_extension="mp4").first()
+
+            self.playlist_total_size+=self.playlist_video_stream.filesize
+
+            print(self.playlist_video_stream)
+            self.playlist_streams.append(self.playlist_video_stream)
+        for stream in self.playlist_streams:
+            stream.download()
+
+    def start_download_thread(self, resolution):
+        download_thread = threading.Thread(target=self.download_playlist, args=(resolution,))
+        download_thread.daemon = True
+        download_thread.start()
+
+    def download_video(self):
+        try:
+            self.resolution_window.hide()
+        except:
+            pass
+
         try:
             self.stream.download(self.download_directory)
         except Exception as err:
-            QMessageBox.critical(self.window, "Error", "An error occurred: Video couldn't be downloaded!" + err.__str__())
+            QMessageBox.critical(self, "Error", "An error occurred: Video couldn't be downloaded!" + err.__str__())
+    
+        # This is for progress bar
+        #self.window.filesize = self.stream.filesize
 
     def show_message(self, title, message):
         QMessageBox.information(self, title, message)
+
+class ResolutionWindow(QDialog):
+
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Resolution")
+        self.setMaximumHeight(200)
+        self.setMaximumWidth(300)
+        self.setMinimumHeight(200)
+        self.setMinimumWidth(300)
+
+        # Radio buttons for resolution selection
+        self.radio_button_1080p = QRadioButton("1080p")
+        self.radio_button_720p = QRadioButton("720p")
+        self.radio_button_480p = QRadioButton("480p")
+        self.radio_button_360p = QRadioButton("360p")
+
+        # Select button
+        self.select_button = QPushButton("Select")
+        # self.select_button.clicked.connect(self.return_button_state)
+
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Select the resolution you want to download:"))
+        layout.addWidget(self.radio_button_1080p)
+        layout.addWidget(self.radio_button_720p)
+        layout.addWidget(self.radio_button_480p)
+        layout.addWidget(self.radio_button_360p)
+        layout.addWidget(self.select_button)
+
+        self.setLayout(layout)
+
+    def return_state(self):
+        if self.radio_button_1080p.isChecked():
+            self.resolution_selected = "1080p"
+        elif self.radio_button_720p.isChecked():
+            self.resolution_selected = "720p"
+        elif self.radio_button_480p.isChecked():
+            self.resolution_selected = "480p"
+        elif self.radio_button_360p.isChecked():
+            self.resolution_selected = "360p"
 
 class VideoDownloaderWorker(QObject):
     started = Signal(int)
@@ -285,7 +420,6 @@ class VideoDownloaderWorker(QObject):
         self.download_directory = download_directory
 
     def download_video(self):
-        print("dfghj", threading.current_thread)
         self.started.emit(0)
         # This part is for playlist installation, will check it later
         #if self.window.playlist_button.isChecked():
