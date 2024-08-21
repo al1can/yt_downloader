@@ -160,10 +160,9 @@ class MainWindow(QMainWindow):
 
     def search_video(self):
         self.progress_updated.emit(0)
-        
-        try:
-            self.show_details_button.setText("Show details")
 
+        self.show_details_button.setText("Show details")
+        try:
             video_url = self.url_text.text()
             self.video = YouTube(video_url)
 
@@ -171,27 +170,23 @@ class MainWindow(QMainWindow):
             self.video.register_on_progress_callback(self._on_progress_callback)
 
             self.stream_list_widget.hide()
-
-            try:
+        
+            if "shorts" in video_url:
+                video_id = video_url.split("shorts/")[-1]
+            else:
                 params = video_url.split("?")[-1].split("&")
-                
+
                 for param in params:
                     key, value = param.split('=')
                     if key == 'v':
                         video_id = value
-            except ValueError as err:
-                QMessageBox.critical(self, "Error", f"The video URL you entered is invalid. Please check the URL and try again.")
-                return
-                
-            if video_id is None:
-                QMessageBox.critical(self, "Error", "An error occurred: Video can't be found!")
-            
-            embed_link = "https://www.youtube.com/embed/" + video_id
-            embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, (self.size().height()/2)-30)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
-            self.video_frame.setHtml(embed_link_complete)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred: {str(e)}") 
+        except Exception as err:
+                    QMessageBox.critical(self, "Error", f"The video URL you entered is invalid. Please check the URL and try again.")
+                    return
+        
+        embed_link = "https://www.youtube.com/embed/" + video_id
+        embed_link_complete = f"<style>body {{background-color: #121212; /* Dark background color */color: #FFFFFF; /* Text color */}}</style><iframe width=\"{min(1000, self.size().width()-35)}\" height=\"{min(720, (self.size().height()/2)-30)}\" src=\"{embed_link}\" title=\"{self.video.title}\" \"frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" allowfullscreen></iframe>"
+        self.video_frame.setHtml(embed_link_complete)
 
     def search_playlist(self):
         self.progress_updated.emit(0)
