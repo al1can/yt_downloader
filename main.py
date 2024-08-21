@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
         self.progress_updated.emit(int(step))
 
     def _on_progress_callback_playlist(self, chunk, file_handle, bytes_remaining):
-        #TODO: progress bar is broken 
+        
         self.downloaded_bytes_playlist=self.playlist_video_stream.filesize - bytes_remaining
         step = (100 * self.downloaded_bytes_playlist) / self.playlist_total_size
 
@@ -344,7 +344,7 @@ class MainWindow(QMainWindow):
             print(self.playlist_video_stream)
             self.playlist_streams.append(self.playlist_video_stream)
         for stream in self.playlist_streams:
-            stream.download()
+            stream.download(self.download_directory)
 
     def start_download_thread(self, resolution):
         download_thread = threading.Thread(target=self.download_playlist, args=(resolution,))
