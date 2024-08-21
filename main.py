@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         self.clear_button = QPushButton("Clear")
         self.video_frame = QWebEngineView()
         self.stream_list_widget = QListWidget()
-        self.show_details_button = QPushButton("Show details")
+        self.show_details_button = QPushButton("Show resolutions")
         self.audio_only_button = QRadioButton("Audio Only")
         self.single_video_button = QRadioButton("Video")
         self.playlist_button = QRadioButton("Playlist")
@@ -161,7 +161,7 @@ class MainWindow(QMainWindow):
     def search_video(self):
         self.progress_updated.emit(0)
 
-        self.show_details_button.setText("Show details")
+        self.show_details_button.setText("Show resolutions")
         try:
             video_url = self.url_text.text()
             self.video = YouTube(video_url)
@@ -231,9 +231,9 @@ class MainWindow(QMainWindow):
             return
         if self.stream_list_widget.isVisible():
             self.stream_list_widget.hide()
-            self.show_details_button.setText("Show details")
+            self.show_details_button.setText("Show resolutions")
         else:
-            self.show_details_button.setText("Hide details")
+            self.show_details_button.setText("Hide resolutions")
             if self.stream_list_widget.count() > 1:
                 self.stream_list_widget.clear()
             for index, stream in enumerate(self.video.streams):
