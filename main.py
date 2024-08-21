@@ -244,11 +244,17 @@ class MainWindow(QMainWindow):
 
     def _on_complete_callback(self, stream, file_path):
         self.download_completed.emit(file_path)
+        self.progress_updated.emit(int(100))
+        #self.download_thread.join()
 
     def _on_complete_callback_playlist(self, stream, file_path):
         self.downloaded_video_playlist+=1
+        #self.download_thread.join()
+        print("thread join")
         if self.downloaded_video_playlist==len(self.playlist_streams):
             self.download_completed.emit(file_path)
+            # Adding 100 percent because sometimes the last progress update doesnt come and it is stuck halfway
+            self.progress_updated.emit(int(100))
         
     def _on_progress_callback(self, chunk, file_handle, bytes_remaining):
         self.filesize = self.stream.filesize
@@ -261,14 +267,13 @@ class MainWindow(QMainWindow):
         self.progress_updated.emit(int(step))
 
     def _on_progress_callback_playlist(self, chunk, file_handle, bytes_remaining):
-        
-        self.downloaded_bytes_playlist=self.playlist_video_stream.filesize - bytes_remaining
-        step = (100 * self.downloaded_bytes_playlist) / self.playlist_total_size
+        self.downloaded_bytes_playlist = self.current_video_size - bytes_remaining
+        self.step_playlist += (100 * self.downloaded_bytes_playlist) / self.playlist_total_size
 
         # Update progress bar in the main thread
         #QMetaObject.invokeMethod(self.window.progress_bar, "setValue", Qt.QueuedConnection, Q_ARG(int, step))
         #self.progress_bar.setValue(step)
-        self.progress_updated.emit(int(step)) 
+        self.progress_updated.emit(int(self.step_playlist)) 
 
     def change_download_directory(self):
         options = QFileDialog.Options()
@@ -326,6 +331,7 @@ class MainWindow(QMainWindow):
         self.playlist_total_size = 0
         self.downloaded_video_playlist = 0
         self.downloaded_bytes_playlist = 0
+        self.step_playlist = 0
         self.playlist_streams = []
         for video_url in self.playlist:
             self.playlist_video = YouTube(video_url)
@@ -344,12 +350,10 @@ class MainWindow(QMainWindow):
             print(self.playlist_video_stream)
             self.playlist_streams.append(self.playlist_video_stream)
         for stream in self.playlist_streams:
-            stream.download(self.download_directory)
-
-    def start_download_thread(self, resolution):
-        download_thread = threading.Thread(target=self.download_playlist, args=(resolution,))
-        download_thread.daemon = True
-        download_thread.start()
+            self.current_video_size = stream.filesize
+            self.download_thread = threading.Thread(target=stream.download, args=(self.download_directory,))
+            self.download_thread.daemon = True
+            self.download_thread.start()
 
     def download_video(self):
         try:
